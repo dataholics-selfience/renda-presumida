@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Briefcase, MessageCircle, AlertTriangle } from 'lucide-react';
+import { MessageCircle, AlertTriangle } from 'lucide-react';
 import RendaConsultation from './RendaConsultation';
 import { RendaResultType } from '../types';
 import { parseRendaResponse } from '../utils/rendaParser';
 import { checkDeviceLimit, incrementDeviceConsultations, getDeviceConsultationHistory } from '../utils/deviceFingerprint';
+import { formatCurrencyDisplay } from '../utils/currencyMask';
 
 interface LayoutProps {
   onResultReady: (result: RendaResultType) => void;
@@ -61,6 +62,14 @@ const Layout = ({ onResultReady }: LayoutProps) => {
       const resultado = parseRendaResponse(rawResponse);
       console.log('✅ Final consultation result:', resultado);
 
+      // Store input data in the result for display (with formatted salary)
+      resultado.inputData = {
+        cargo: formData.cargo,
+        empresa: formData.empresa,
+        localidade: formData.localidade,
+        salario_declarado: formData.salario_declarado ? formatCurrencyDisplay(formData.salario_declarado) : 'Não informado'
+      };
+
       // Increment device consultation count
       const newCount = incrementDeviceConsultations();
       
@@ -95,8 +104,12 @@ const Layout = ({ onResultReady }: LayoutProps) => {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                <Briefcase size={24} className="text-white" />
+              <div className="w-16 h-16 flex items-center justify-center">
+                <img 
+                  src="/logo-omni.svg" 
+                  alt="Omni Logo" 
+                  className="w-16 h-auto"
+                />
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Renda Presumida</h1>

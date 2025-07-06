@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, AlertTriangle, MessageCircle, Briefcase, Shield } from 'lucide-react';
+import { Search, AlertTriangle, MessageCircle, Shield, Upload, X } from 'lucide-react';
 import { RendaResultType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import LoadingScreen from './LoadingScreen';
+import { applyCurrencyMask, removeCurrencyMask } from '../utils/currencyMask';
 
 interface RendaConsultationProps {
   onConsultation: (formData: any, sessionId: string) => Promise<RendaResultType>;
@@ -22,13 +23,32 @@ const RendaConsultation = ({ onConsultation, consultationCount, isDeviceLimited 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [sessionId] = useState(() => uuidv4().replace(/-/g, '').substring(0, 24));
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    
+    if (name === 'salario_declarado') {
+      // Apply currency mask to salary field
+      const maskedValue = applyCurrencyMask(value);
+      setFormData(prev => ({
+        ...prev,
+        [name]: maskedValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+  };
+
+  const handleFileUpload = () => {
+    setShowUploadModal(true);
+  };
+
+  const closeModal = () => {
+    setShowUploadModal(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,7 +60,14 @@ const RendaConsultation = ({ onConsultation, consultationCount, isDeviceLimited 
 
     try {
       console.log('🚀 Iniciando consulta de renda para:', formData);
-      const resultado = await onConsultation(formData, sessionId);
+      
+      // Prepare form data with unmasked salary for API
+      const apiFormData = {
+        ...formData,
+        salario_declarado: formData.salario_declarado ? removeCurrencyMask(formData.salario_declarado) : ''
+      };
+      
+      const resultado = await onConsultation(apiFormData, sessionId);
       console.log('✅ Resultado recebido:', resultado);
       
       // Navigate to results page
@@ -63,30 +90,89 @@ const RendaConsultation = ({ onConsultation, consultationCount, isDeviceLimited 
 
   return (
     <div className="space-y-8">
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md mx-4 relative">
+            <button
+              onClick={closeModal}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X size={20} />
+            </button>
+            
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={20} className="text-yellow-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-lg font-bold text-yellow-800 mb-2">Disclaimer</h3>
+                  <div className="text-sm text-yellow-800">
+                    Recursos em desenvolvimento. Brevemente será possível subir os holerites do potencial cliente e interpretá-lo automaticamente.
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={closeModal}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Consultation Form */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Nova Consulta de Renda</h2>
-          <p className="text-gray-600">Preencha os dados para análise de renda presumida e detecção de fraudes</p>
-          
-          {/* Consultation Counter */}
-          <div className="mt-4 flex items-center gap-3">
-            <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
-              consultationsRemaining > 3 
-                ? 'bg-green-100 text-green-800' 
-                : consultationsRemaining > 0
-                ? 'bg-yellow-100 text-yellow-800'
-                : 'bg-red-100 text-red-800'
-            }`}>
-              <Shield size={16} />
-              {consultationsRemaining} consultas restantes
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Nova Consulta de Renda</h2>
+              <p className="text-gray-600">Preencha os dados para análise de renda presumida e detecção de fraudes</p>
+              
+              {/* Consultation Counter */}
+              <div className="mt-4 flex items-center gap-3">
+                <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${
+                  consultationsRemaining > 3 
+                    ? 'bg-green-100 text-green-800' 
+                    : consultationsRemaining > 0
+                    ? 'bg-yellow-100 text-yellow-800'
+                    : 'bg-red-100 text-red-800'
+                }`}>
+                  <Shield size={16} />
+                  {consultationsRemaining} consultas restantes
+                </div>
+                
+                {consultationsRemaining <= 3 && consultationsRemaining > 0 && (
+                  <div className="text-sm text-yellow-600">
+                    ⚠️ Poucas consultas restantes
+                  </div>
+                )}
+              </div>
             </div>
             
-            {consultationsRemaining <= 3 && consultationsRemaining > 0 && (
-              <div className="text-sm text-yellow-600">
-                ⚠️ Poucas consultas restantes
-              </div>
-            )}
+            {/* File Upload Section */}
+            <div className="ml-6">
+              <button
+                onClick={handleFileUpload}
+                className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+              >
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                  <Upload size={24} className="text-gray-600 group-hover:text-blue-600" />
+                </div>
+                <div className="text-center">
+                  <div className="text-sm font-medium text-gray-700 group-hover:text-blue-700">
+                    Upload Holerite
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Clique para enviar
+                  </div>
+                </div>
+              </button>
+            </div>
           </div>
         </div>
 

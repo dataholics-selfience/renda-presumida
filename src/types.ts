@@ -11,4 +11,10 @@ export interface RendaResultType {
   nivel: string;
   porte_empresa: string;
   alerta_fraude: string;
+  inputData?: {
+    cargo: string;
+    empresa: string;
+    localidade: string;
+    salario_declarado: string;
+  };
 }
