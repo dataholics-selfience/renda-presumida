@@ -7,13 +7,14 @@ export const parseRendaResponse = (rawResponse: any): RendaResultType => {
   let parsedData: any = null;
   
   try {
-    // Handle nested array structure
+    // Handle the specific structure: array with output property
     if (Array.isArray(rawResponse) && rawResponse.length > 0) {
-      if (rawResponse[0].output) {
-        jsonString = rawResponse[0].output;
-      } else {
-        // Direct array with renda data
-        parsedData = rawResponse[0];
+      const firstItem = rawResponse[0];
+      if (firstItem && firstItem.output) {
+        jsonString = firstItem.output;
+        console.log('📝 Extracted output string:', jsonString);
+      } else if (typeof firstItem === 'object') {
+        parsedData = firstItem;
       }
     } else if (typeof rawResponse === 'string') {
       jsonString = rawResponse;
@@ -21,7 +22,7 @@ export const parseRendaResponse = (rawResponse: any): RendaResultType => {
       parsedData = rawResponse;
     }
     
-    // If we still have a string, parse it
+    // If we have a JSON string, clean and parse it
     if (jsonString && !parsedData) {
       console.log('🧹 Original JSON string:', jsonString);
       
@@ -29,30 +30,31 @@ export const parseRendaResponse = (rawResponse: any): RendaResultType => {
       jsonString = jsonString
         .replace(/```json\s*/g, '')
         .replace(/```\s*/g, '')
+        .replace(/^\s*[\r\n]/gm, '') // Remove empty lines
         .trim();
       
       console.log('🧹 Cleaned JSON string:', jsonString);
       
-      // Parse the actual renda data
+      // Parse the cleaned JSON
       try {
         parsedData = JSON.parse(jsonString);
         console.log('✅ JSON parsing successful:', parsedData);
       } catch (parseError) {
         console.error('❌ Error parsing JSON:', parseError);
-        console.log('📝 Attempting alternative parsing...');
+        console.log('📝 Attempting regex extraction...');
         
-        // Try to extract JSON from text using regex
+        // Try to extract JSON object using regex
         const jsonMatch = jsonString.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           try {
             parsedData = JSON.parse(jsonMatch[0]);
-            console.log('✅ Alternative parsing successful');
-          } catch (altError) {
-            console.error('❌ Alternative parsing failed:', altError);
-            throw new Error('Resposta inválida do servidor. O formato dos dados não pôde ser processado.');
+            console.log('✅ Regex extraction successful:', parsedData);
+          } catch (regexError) {
+            console.error('❌ Regex extraction failed:', regexError);
+            throw new Error('Não foi possível processar a resposta do servidor. Formato JSON inválido.');
           }
         } else {
-          throw new Error('Nenhum dado estruturado válido encontrado na resposta do servidor.');
+          throw new Error('Nenhum objeto JSON válido encontrado na resposta.');
         }
       }
     }
@@ -66,15 +68,15 @@ export const parseRendaResponse = (rawResponse: any): RendaResultType => {
       throw error;
     }
     
-    throw new Error(`Erro ao processar resposta da consulta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`);
+    throw new Error(`Erro ao processar resposta: ${error}`);
   }
 
-  // Validate that we have some data
+  // Validate that we have valid data
   if (!parsedData || typeof parsedData !== 'object') {
-    throw new Error('Estrutura de dados de renda inválida recebida do servidor');
+    throw new Error('Dados de renda inválidos recebidos do servidor');
   }
 
-  // Build the result with proper validation
+  // Build the result with proper validation and defaults
   const resultado: RendaResultType = {
     cargo: parsedData.cargo || 'Não informado',
     empresa: parsedData.empresa || 'Não informado',

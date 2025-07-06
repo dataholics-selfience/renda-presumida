@@ -1,26 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Briefcase, MessageCircle } from 'lucide-react';
+import { Briefcase, MessageCircle, AlertTriangle } from 'lucide-react';
 import RendaConsultation from './RendaConsultation';
 import { RendaResultType } from '../types';
 import { parseRendaResponse } from '../utils/rendaParser';
+import { checkDeviceLimit, incrementDeviceConsultations, getDeviceConsultationHistory } from '../utils/deviceFingerprint';
 
 interface LayoutProps {
   onResultReady: (result: RendaResultType) => void;
 }
 
 const Layout = ({ onResultReady }: LayoutProps) => {
-  const [consultationCount, setConsultationCount] = useState(() => {
-    const saved = localStorage.getItem('consultationCount');
-    return saved ? parseInt(saved, 10) : 0;
-  });
+  const [deviceLimitInfo, setDeviceLimitInfo] = useState(() => checkDeviceLimit());
+
+  useEffect(() => {
+    // Check device limit on component mount
+    const limitInfo = checkDeviceLimit();
+    setDeviceLimitInfo(limitInfo);
+    
+    // Log device info for debugging
+    const history = getDeviceConsultationHistory();
+    console.log('🔍 Device consultation history:', history);
+  }, []);
 
   const handleConsultation = async (formData: any, sessionId: string): Promise<RendaResultType> => {
-    if (consultationCount >= 10) {
-      throw new Error('Limite de 10 consultas atingido. Entre em contato pelo WhatsApp para continuar.');
+    // Check device limit before making consultation
+    const currentLimitInfo = checkDeviceLimit();
+    
+    if (currentLimitInfo.isLimited) {
+      throw new Error('Limite de 10 consultas atingido para este dispositivo. Entre em contato pelo WhatsApp para continuar.');
     }
 
     try {
       console.log('🚀 Starting renda consultation for:', formData);
+      console.log('🔒 Device ID:', currentLimitInfo.deviceId);
       
       const response = await fetch('https://primary-production-2e3b.up.railway.app/webhook/renda-presumida', {
         method: 'POST',
@@ -32,7 +44,8 @@ const Layout = ({ onResultReady }: LayoutProps) => {
           empresa: formData.empresa,
           localidade: formData.localidade,
           salario_declarado: formData.salario_declarado,
-          sessionId: sessionId
+          sessionId: sessionId,
+          deviceId: currentLimitInfo.deviceId // Include device ID in request
         }),
       });
 
@@ -48,10 +61,15 @@ const Layout = ({ onResultReady }: LayoutProps) => {
       const resultado = parseRendaResponse(rawResponse);
       console.log('✅ Final consultation result:', resultado);
 
-      // Update consultation count
-      const newCount = consultationCount + 1;
-      setConsultationCount(newCount);
-      localStorage.setItem('consultationCount', newCount.toString());
+      // Increment device consultation count
+      const newCount = incrementDeviceConsultations();
+      
+      // Update local state
+      setDeviceLimitInfo({
+        isLimited: newCount >= 10,
+        consultationsUsed: newCount,
+        deviceId: currentLimitInfo.deviceId
+      });
 
       // Set result and navigate
       onResultReady(resultado);
@@ -67,6 +85,8 @@ const Layout = ({ onResultReady }: LayoutProps) => {
       throw new Error('Erro inesperado na consulta. Tente novamente.');
     }
   };
+
+  const consultationsRemaining = Math.max(0, 10 - deviceLimitInfo.consultationsUsed);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -87,10 +107,12 @@ const Layout = ({ onResultReady }: LayoutProps) => {
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <div className="text-sm text-gray-600">Consultas restantes</div>
-                <div className="text-lg font-bold text-blue-600">{10 - consultationCount}</div>
+                <div className={`text-lg font-bold ${consultationsRemaining > 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {consultationsRemaining}
+                </div>
               </div>
               
-              {consultationCount >= 10 && (
+              {deviceLimitInfo.isLimited && (
                 <a 
                   href="https://wa.me/5511995736666" 
                   target="_blank" 
@@ -106,11 +128,29 @@ const Layout = ({ onResultReady }: LayoutProps) => {
         </div>
       </header>
 
+      {/* Device Limit Warning */}
+      {deviceLimitInfo.isLimited && (
+        <div className="bg-red-50 border-b border-red-200">
+          <div className="max-w-7xl mx-auto px-4 py-3">
+            <div className="flex items-center gap-3">
+              <AlertTriangle size={20} className="text-red-600" />
+              <div>
+                <div className="font-semibold text-red-800">Limite de consultas atingido</div>
+                <div className="text-sm text-red-700">
+                  Este dispositivo já realizou 10 consultas. Entre em contato pelo WhatsApp para continuar.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         <RendaConsultation 
           onConsultation={handleConsultation}
-          consultationCount={consultationCount}
+          consultationCount={deviceLimitInfo.consultationsUsed}
+          isDeviceLimited={deviceLimitInfo.isLimited}
         />
       </main>
 
@@ -131,6 +171,14 @@ const Layout = ({ onResultReady }: LayoutProps) => {
               Suporte via WhatsApp: (11) 99573-6666
             </a>
           </div>
+          
+          {/* Debug info in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 text-xs text-gray-400">
+              Device ID: {deviceLimitInfo.deviceId.slice(-8)}... | 
+              Consultas: {deviceLimitInfo.consultationsUsed}/10
+            </div>
+          )}
         </div>
       </footer>
     </div>

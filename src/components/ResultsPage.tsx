@@ -165,11 +165,6 @@ const ResultsPage = ({ result }: ResultsPageProps) => {
                 <div className="text-2xl font-bold text-purple-800">{result.salario_estimado.max}</div>
               </div>
             </div>
-
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-600">Fonte dos dados</div>
-              <div className="font-medium text-gray-800">{result.salario_estimado.fonte}</div>
-            </div>
           </div>
 
           {/* Professional Level and Company Size */}
